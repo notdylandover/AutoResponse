@@ -5,59 +5,78 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
 let activityIndex = 0;
-let countingReplies = true;
 
 // Discord iOS
 // Discord Android
 // null = Discord Desktop
 
-identifyProperties.browser = 'Discord iOS';
+identifyProperties.browser = 'Discord Desktop';
 
 module.exports = async (client) => {
     try {
         const dbPath = path.join(__dirname, "..", "data", "leaderboards.db");
         const db = new sqlite3.Database(dbPath);
-        
-        const queryReplies = `SELECT SUM(replies) AS totalReplies FROM current`;
-        const queryRows = `SELECT COUNT(*) AS rowCount FROM current`;
-        const query = countingReplies ? queryReplies : queryRows;
-        
-        db.get(query, [], (err, row) => {
+
+        const getTablesQuery = `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`;
+
+        db.all(getTablesQuery, [], (err, tables) => {
             if (err) {
-                return Error(`Error querying database: ${err.message}`);
+                return Error(`Error retrieving tables: ${err.message}`);
             }
-            
-            if (row) {
-                let count;
-                if (countingReplies) {
-                    count = row.totalReplies !== null ? row.totalReplies : 0;
-                } else {
-                    count = row.rowCount !== null ? row.rowCount : 0;
-                }
-                
-                const activityLabels = countingReplies ? ["Replies", "Being worked on..."] : ["Participants", "Other activity..."];
-                
-                const activities = [
-                    `${count} ${activityLabels[activityIndex]}`
-                ];
-                
-                client.user.setPresence({
-                    activities: [
-                        {
-                            name: activities[activityIndex],
-                            type: 4
+
+            if (tables.length === 0) {
+                Error(`No tables found in the database.`);
+                db.close();
+                return;
+            }
+
+            let totalReplies = 0;
+            let uniqueUsers = new Set();
+            let processedTables = 0;
+
+            tables.forEach((table) => {
+                const repliesQuery = `SELECT SUM(replies) AS sumReplies FROM ${table.name}`;
+                db.get(repliesQuery, [], (err, row) => {
+                    if (err) {
+                        Error(`Error querying replies in table ${table.name}: ${err.message}`);
+                    } else {
+                        totalReplies += row.sumReplies || 0;
+                    }
+
+                    const usersQuery = `SELECT username FROM ${table.name}`;
+
+                    db.all(usersQuery, [], (err, rows) => {
+                        if (err) {
+                            Error(`Error querying users in table ${table.name}: ${err.message}`);
+                        } else {
+                            rows.forEach(row => {
+                                uniqueUsers.add(row.username);
+                            });
                         }
-                    ],
-                    status: "online"
+
+                        processedTables++;
+                        if (processedTables === tables.length) {
+                            const activities = [
+                                `${totalReplies} replies`,
+                                `${uniqueUsers.size} users`
+                            ];
+
+                            client.user.setPresence({
+                                activities: [
+                                    {
+                                        name: activities[activityIndex],
+                                        type: 4
+                                    }
+                                ],
+                                status: "online"
+                            });
+
+                            activityIndex = (activityIndex + 1) % activities.length;
+                            db.close();
+                        }
+                    });
                 });
-                
-                activityIndex = (activityIndex + 1) % activities.length;
-                countingReplies = !countingReplies;
-            } else {
-                Error(`No rows returned from the database.`);
-            }
-            
-            db.close();
+            });
         });
     } catch (error) {
         Error(`Error updating presence: ${error.message}`);

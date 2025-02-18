@@ -15,7 +15,8 @@ module.exports = {
             .setRequired(true)
             .addChoices(
                 { name: "Current", value: "current" },
-                { name: "Season 1", value: "season1" }
+                { name: "Season 2", value: "Season2" },
+                { name: "Season 1", value: "Season1" }
             )
         )
         .setContexts(InteractionContextType.Guild, InteractionContextType.PrivateChannel)
@@ -44,11 +45,11 @@ module.exports = {
                 const owner = groups.includes("Owner") ? EMOJIS.ActiveDeveloper : "";
                 const programmer = groups.includes("Programmer") ? EMOJIS.ico_wrench : "";
                 const helper = groups.includes("Helper") ? EMOJIS.ico_helper : "";
-                const s1winner = groups.includes("Season 1 Winner") ? EMOJIS.ico_trophy : "";
-                const s2winner = groups.includes("Season 2 Winner") ? EMOJIS.ico_trophy : "";
+                const s1winner = groups.includes("S1W") ? EMOJIS.Season_1_Winner : "";
+                const s2winner = groups.includes("S2W") ? EMOJIS.Season_2_Winner : "";
 
                 return {
-                    name: `${medal} - ${entry.username} ${owner} ${programmer} ${helper} ${s1winner}`,
+                    name: `${medal} - ${entry.username} ${owner} ${programmer} ${helper} ${s1winner} ${s2winner}`,
                     value: `**${entry.replies} replies**`,
                     inline: false,
                 };
@@ -57,7 +58,7 @@ module.exports = {
             let description = "";
 
             if (season === "current") {
-                description = "This is the current leaderboard. The next season starts <t:1735707600:R>";
+                description = "This is the current leaderboard.";
             } else {
                 description = "You are currently viewing an older leaderboard.";
             }
@@ -67,7 +68,7 @@ module.exports = {
         } catch (error) {
             Error(`Error executing ${interaction.commandName}: ${error.stack}`);
 
-            const errorEmbed = ErrorEmbed(`Error executing ${interaction.commandName}:\n${error.message}`);
+            const errorEmbed = ErrorEmbed(`Error executing ${interaction.commandName}:\n${error.stack}`);
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({ embeds: [errorEmbed], ephemeral: true });
             } else {
@@ -91,12 +92,12 @@ async function loadLeaderboard(season) {
             }
         );
 
-        const tableName = season === "current" ? "current" : `"Season 1"`;
+        const tableName = season === "current" ? "current" : season;
         const query = `SELECT username, replies, groups FROM ${tableName}`;
 
         db.all(query, [], (err, rows) => {
             if (err) {
-                Error(`Error querying the database: ${err.message}`);
+                Error(`Error querying the database: ${err}`);
                 db.close();
                 reject([]);
             } else {
